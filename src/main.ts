@@ -12,8 +12,9 @@ import "./leafletWorkaround.ts";
 import luck from "./luck.ts";
 
 // App name
-const APP_NAME = "FossilFinder";
+const APP_NAME = "Smileycache";
 document.title = APP_NAME;
+const ITEM_NAME = "Smiley";
 
 // Location of our classroom (as identified on Google Maps)
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
@@ -23,6 +24,36 @@ const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
+const MAX_CACHE_ITEMS = 10;
+
+// Representation of a cell location
+interface CellLocation {
+  i: number;
+  j: number;
+}
+
+// Representation of an item with a type and an origin location
+interface Item {
+  type: string;
+  origin: CellLocation;
+}
+
+// List of all possible item types
+const ITEM_TYPES: string[] = [
+  "😀",
+  "😃",
+  "😄",
+  "😁",
+  "😆",
+  "😅",
+  "🤣",
+  "😂",
+  "🙂",
+  "😉",
+  "😊",
+  "😇",
+  "🥰",
+];
 
 // Config object for button creation function
 interface ButtonConfig {
@@ -64,18 +95,34 @@ const playerMarker = leaflet.marker(OAKES_CLASSROOM);
 playerMarker.bindTooltip("You're Here");
 playerMarker.addTo(map);
 
-// Display the player's fossils
-let playerFossils = 0;
+// Display the player's items as a collection of unique items
+const playerItems: Item[] = [];
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // element `statusPanel` is defined in index.html
-statusPanel.innerHTML = "No fossils yet! Go out and collect some!";
+statusPanel.innerHTML = `Go out and collect some ${ITEM_NAME}s!`;
+
+// Returns a string representing a list of items
+function displayItems(items: Item[]) {
+  let output = "";
+  for (let i = 0; i < items.length; i++) {
+    output += `${items[i].type} (${items[i].origin.i}, ${items[i].origin.j}), `;
+  }
+  output = output.slice(0, -2); // Remove extra space and comma
+  return output;
+}
 
 // Add caches to the map by cell numbers
-function spawnCache(i: number, j: number) {
+function spawnCache(location: CellLocation) {
   // Convert cell numbers into lat/lng bounds
-  const origin = OAKES_CLASSROOM;
+  const mapOrigin = OAKES_CLASSROOM;
   const bounds = leaflet.latLngBounds([
-    [origin.lat + i * TILE_DEGREES, origin.lng + j * TILE_DEGREES],
-    [origin.lat + (i + 1) * TILE_DEGREES, origin.lng + (j + 1) * TILE_DEGREES],
+    [
+      mapOrigin.lat + location.i * TILE_DEGREES,
+      mapOrigin.lng + location.j * TILE_DEGREES,
+    ],
+    [
+      mapOrigin.lat + (location.i + 1) * TILE_DEGREES,
+      mapOrigin.lng + (location.j + 1) * TILE_DEGREES,
+    ],
   ]);
 
   // Add a rectangle to the map to represent the cache
@@ -84,40 +131,60 @@ function spawnCache(i: number, j: number) {
 
   // Handle interactions with the cache
   rect.bindPopup(() => {
-    // Each cache has a random fossil amount, mutable by the player
-    let cacheFossils = Math.floor(
-      luck([i, j, "initialValue"].toString()) * 100,
+    // Each cache has a random item amount
+    const itemCount = Math.floor(
+      luck([location.i, location.j, "initialValue"].toString()) *
+        MAX_CACHE_ITEMS,
     );
+    // Fill cache with randomly generated items
+    const cacheItems: Item[] = [];
+    for (let i = 0; i < itemCount; i++) {
+      const newItem: Item = {
+        type: ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)],
+        origin: location,
+      };
+      cacheItems.push(newItem);
+    }
 
     // The popup offers a description and button
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML =
-      `There is a cache here at (${i},${j}). It contains <span id="value">${cacheFossils}</span> fossils.`;
-    // Clicking this button decrements the cache's fossils and increments the player's fossils
+      `There is a cache here at (${location.i},${location.j}). ${ITEM_NAME}s: <span id="value">${
+        displayItems(cacheItems)
+      }</span>`;
+    // Clicking this button removes an item from the cache and adds it to the player's items
     createButton({
       name: "Collect",
       div: popupDiv,
       clickFunction: () => {
-        if (cacheFossils > 0) {
-          cacheFossils--;
+        if (cacheItems.length > 0) {
+          const cacheItem = cacheItems.pop();
           popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-            cacheFossils.toString();
-          playerFossils++;
-          statusPanel.innerHTML = `Fossils collected: ${playerFossils}`;
+            displayItems(cacheItems);
+          playerItems.push(cacheItem!);
+          statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
+            displayItems(
+              playerItems,
+            )
+          }`;
         }
       },
     });
-    // Clicking this button increments the cache's fossils and decrements the player's fossils
+    // Clicking this button removes an item from the player's collection and adds it to the cache
     createButton({
       name: "Deposit",
       div: popupDiv,
       clickFunction: () => {
-        if (playerFossils > 0) {
-          cacheFossils++;
+        if (playerItems.length > 0) {
+          const playerItem = playerItems.pop();
+          statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
+            displayItems(
+              playerItems,
+            )
+          }`;
+          cacheItems.push(playerItem!);
           popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-            cacheFossils.toString();
-          playerFossils--;
-          statusPanel.innerHTML = `Fossils collected: ${playerFossils}`;
+            displayItems(cacheItems);
         }
       },
     });
@@ -131,7 +198,7 @@ for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
   for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
     // If location i,j is lucky enough, spawn a cache
     if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-      spawnCache(i, j);
+      spawnCache({ i: i, j: j });
     }
   }
 }
