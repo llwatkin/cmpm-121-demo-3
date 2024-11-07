@@ -98,11 +98,27 @@ function spawnCache(i: number, j: number) {
       name: "Collect",
       div: popupDiv,
       clickFunction: () => {
-        cacheFossils--;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          cacheFossils.toString();
-        playerFossils++;
-        statusPanel.innerHTML = `Fossils collected: ${playerFossils}`;
+        if (cacheFossils > 0) {
+          cacheFossils--;
+          popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+            cacheFossils.toString();
+          playerFossils++;
+          statusPanel.innerHTML = `Fossils collected: ${playerFossils}`;
+        }
+      },
+    });
+    // Clicking this button increments the cache's fossils and decrements the player's fossils
+    createButton({
+      name: "Deposit",
+      div: popupDiv,
+      clickFunction: () => {
+        if (playerFossils > 0) {
+          cacheFossils++;
+          popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+            cacheFossils.toString();
+          playerFossils--;
+          statusPanel.innerHTML = `Fossils collected: ${playerFossils}`;
+        }
       },
     });
 
