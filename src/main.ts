@@ -38,22 +38,15 @@ interface Item {
   origin: CellLocation;
 }
 
-// List of all possible item types
-const ITEM_TYPES: string[] = [
-  "😀",
-  "😃",
-  "😄",
-  "😁",
-  "😆",
-  "😅",
-  "🤣",
-  "😂",
-  "🙂",
-  "😉",
-  "😊",
-  "😇",
-  "🥰",
-];
+// Get list of all possible item types
+import data from "./items.json" with { type: "json" };
+const ITEM_TYPES = data.types;
+
+// Returns a random item type from the item types array
+function getRandomItemType() {
+  const randIndex = Math.floor(Math.random() * ITEM_TYPES.length);
+  return ITEM_TYPES[randIndex];
+}
 
 // Config object for button creation function
 interface ButtonConfig {
@@ -140,7 +133,7 @@ function spawnCache(location: CellLocation) {
     const cacheItems: Item[] = [];
     for (let i = 0; i < itemCount; i++) {
       const newItem: Item = {
-        type: ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)],
+        type: getRandomItemType(),
         origin: location,
       };
       cacheItems.push(newItem);
