@@ -18,24 +18,29 @@ const ITEM_NAME = "Smiley";
 
 // Location of our classroom (as identified on Google Maps)
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
+// Location of latitude 0, longitude 0
+const NULL_ISLAND = leaflet.latLng(0, 0);
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 8;
+const CELL_DEGREES = 1e-4;
+const CELL_VISIBILITY_RADIUS = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 const MAX_CACHE_ITEMS = 10;
 
-// Representation of a cell location
-interface CellLocation {
-  i: number;
-  j: number;
+// Representation of a cell
+interface Cell {
+  readonly i: number;
+  readonly j: number;
 }
 
-// Representation of an item with a type and an origin location
+// All known cells
+const knownCells: Map<string, Cell> = new Map();
+
+// Representation of an item with a type and an origin cell
 interface Item {
-  type: string;
-  origin: CellLocation;
+  readonly type: string;
+  readonly origin: Cell;
 }
 
 // Get list of all possible item types
@@ -43,7 +48,7 @@ import data from "./items.json" with { type: "json" };
 const ITEM_TYPES = data.types;
 
 // Returns a random item type from the item types array
-function getRandomItemType() {
+function getRandomItemType(): string {
   const randIndex = Math.floor(Math.random() * ITEM_TYPES.length);
   return ITEM_TYPES[randIndex];
 }
@@ -55,8 +60,8 @@ interface ButtonConfig {
   clickFunction(): void;
 }
 
-// Create a button with a name and click function in a certain div
-function createButton(config: ButtonConfig) {
+// Create and return a button with a name and click function in a certain div
+function createButton(config: ButtonConfig): HTMLButtonElement {
   const newButton = document.createElement("button");
   newButton.innerHTML = config.name;
   config.div.append(newButton);
@@ -77,7 +82,7 @@ const map = leaflet.map(document.getElementById("map")!, {
 // Populate the map with a background tile layer
 leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
+    maxZoom: GAMEPLAY_ZOOM_LEVEL,
     attribution:
       '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   })
@@ -94,29 +99,61 @@ const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // 
 statusPanel.innerHTML = `Go out and collect some ${ITEM_NAME}s!`;
 
 // Returns a string representing a list of items
-function displayItems(items: Item[]) {
+function displayItems(items: Item[], showData: boolean): string {
   let output = "";
   for (let i = 0; i < items.length; i++) {
-    output += `${items[i].type} (${items[i].origin.i}, ${items[i].origin.j}), `;
+    output += items[i].type;
+    if (showData) {
+      output += `(${items[i].origin.i.toFixed(0)}, ${
+        items[i].origin.j.toFixed(0)
+      }), `;
+    } else {
+      output += ", ";
+    }
   }
   output = output.slice(0, -2); // Remove extra space and comma
   return output;
 }
 
-// Add caches to the map by cell numbers
-function spawnCache(location: CellLocation) {
-  // Convert cell numbers into lat/lng bounds
-  const mapOrigin = OAKES_CLASSROOM;
+// Returns a cell that has already been constructed or constructs a new cell to return
+function getKnownCell(cell: Cell): Cell {
+  const { i, j } = cell;
+  const key = [i, j].toString();
+  // If this cell has not been constructed already, construct it
+  if (!knownCells.has(key)) {
+    knownCells.set(key, { i, j });
+  }
+  return knownCells.get(key)!;
+}
+
+// Returns the cell for a given lat/lng point
+function getCellForPoint(point: leaflet.LatLng): Cell {
+  return getKnownCell({
+    i: point.lat / CELL_DEGREES,
+    j: point.lng / CELL_DEGREES,
+  });
+}
+
+// Converts cell numbers into lat/lng bounds
+function getCellBounds(cell: Cell) {
+  const mapOrigin = NULL_ISLAND;
   const bounds = leaflet.latLngBounds([
     [
-      mapOrigin.lat + location.i * TILE_DEGREES,
-      mapOrigin.lng + location.j * TILE_DEGREES,
+      mapOrigin.lat + cell.i * CELL_DEGREES,
+      mapOrigin.lng + cell.j * CELL_DEGREES,
     ],
     [
-      mapOrigin.lat + (location.i + 1) * TILE_DEGREES,
-      mapOrigin.lng + (location.j + 1) * TILE_DEGREES,
+      mapOrigin.lat + (cell.i + 1) * CELL_DEGREES,
+      mapOrigin.lng + (cell.j + 1) * CELL_DEGREES,
     ],
   ]);
+  return bounds;
+}
+
+// Add caches to the map by cell numbers
+function spawnCache(cell: Cell) {
+  // Convert cell numbers into lat/lng bounds
+  const bounds = getCellBounds(cell);
 
   // Add a rectangle to the map to represent the cache
   const rect = leaflet.rectangle(bounds);
@@ -126,7 +163,7 @@ function spawnCache(location: CellLocation) {
   rect.bindPopup(() => {
     // Each cache has a random item amount
     const itemCount = Math.floor(
-      luck([location.i, location.j, "initialValue"].toString()) *
+      luck([cell.i, cell.j, "initialValue"].toString()) *
         MAX_CACHE_ITEMS,
     );
     // Fill cache with randomly generated items
@@ -134,17 +171,18 @@ function spawnCache(location: CellLocation) {
     for (let i = 0; i < itemCount; i++) {
       const newItem: Item = {
         type: getRandomItemType(),
-        origin: location,
+        origin: cell,
       };
       cacheItems.push(newItem);
     }
 
     // The popup offers a description and button
     const popupDiv = document.createElement("div");
-    popupDiv.innerHTML =
-      `There is a cache here at (${location.i},${location.j}). ${ITEM_NAME}s: <span id="value">${
-        displayItems(cacheItems)
-      }</span>`;
+    popupDiv.innerHTML = `There is a cache here at (${cell.i.toFixed(0)}, ${
+      cell.j.toFixed(0)
+    }). ${ITEM_NAME}s: <span id="value">${
+      displayItems(cacheItems, false)
+    }</span>`;
     // Clicking this button removes an item from the cache and adds it to the player's items
     createButton({
       name: "Collect",
@@ -153,11 +191,12 @@ function spawnCache(location: CellLocation) {
         if (cacheItems.length > 0) {
           const cacheItem = cacheItems.pop();
           popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-            displayItems(cacheItems);
+            displayItems(cacheItems, false);
           playerItems.push(cacheItem!);
           statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
             displayItems(
               playerItems,
+              true,
             )
           }`;
         }
@@ -173,11 +212,12 @@ function spawnCache(location: CellLocation) {
           statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
             displayItems(
               playerItems,
+              true,
             )
           }`;
           cacheItems.push(playerItem!);
           popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-            displayItems(cacheItems);
+            displayItems(cacheItems, false);
         }
       },
     });
@@ -187,11 +227,15 @@ function spawnCache(location: CellLocation) {
 }
 
 // Look around the player's neighborhood for caches to spawn
-for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
-  for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
+for (let i = -CELL_VISIBILITY_RADIUS; i < CELL_VISIBILITY_RADIUS; i++) {
+  for (let j = -CELL_VISIBILITY_RADIUS; j < CELL_VISIBILITY_RADIUS; j++) {
     // If location i,j is lucky enough, spawn a cache
     if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-      spawnCache({ i: i, j: j });
+      const playerCell = getCellForPoint(OAKES_CLASSROOM);
+      spawnCache({ i: playerCell.i + i, j: playerCell.j + j });
+      console.log(
+        "spawned cache at i: " + playerCell.i + i + " j: " + playerCell.j + j,
+      );
     }
   }
 }
