@@ -31,11 +31,15 @@ const CELL_VISIBILITY_RADIUS = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 const MAX_CACHE_ITEMS = 10;
 
-// Representation of an item with a type and an origin cell
+// Representation of an item with a type, origin cell, and serial number
 interface Item {
   readonly type: string;
   readonly origin: Cell;
+  readonly serial: number;
 }
+
+// Current serial number
+let serialNum = 0;
 
 // Get list of all possible item types
 import data from "./items.json" with { type: "json" };
@@ -97,13 +101,20 @@ function coords(cell: Cell): string {
   return `(${cell.i.toFixed(0)}, ${cell.j.toFixed(0)})`;
 }
 
+// Returns a string in format i:j#serial for a given item
+function getItemName(item: Item): string {
+  return `${item.origin.i.toFixed(0)}:${
+    item.origin.j.toFixed(0)
+  }#${item.serial}`;
+}
+
 // Returns a string representing a list of items
 function displayItems(items: Item[], showData: boolean): string {
   let output = "";
   for (let i = 0; i < items.length; i++) {
     output += items[i].type;
     if (showData) {
-      output += coords(items[i].origin) + ", ";
+      output += getItemName(items[i]) + ", ";
     } else {
       output += ", ";
     }
@@ -147,8 +158,10 @@ function spawnCache(cell: Cell) {
       const newItem: Item = {
         type: getRandomItemType(),
         origin: cell,
+        serial: serialNum,
       };
       cacheItems.push(newItem);
+      serialNum++;
     }
 
     // The popup offers a description and button
