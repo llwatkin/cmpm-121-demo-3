@@ -86,10 +86,19 @@ leaflet
   })
   .addTo(map);
 
+const playerLocation: leaflet.LatLng = OAKES_CLASSROOM; // Initial location is Oakes Classroom for now
 // Add a marker to represent the player
-const playerMarker = leaflet.marker(OAKES_CLASSROOM);
+let playerMarker = leaflet.marker(playerLocation);
 playerMarker.bindTooltip("You're Here");
 playerMarker.addTo(map);
+
+function drawPlayerMarker(location: leaflet.LatLng) {
+  playerMarker.removeFrom(map);
+  playerMarker = leaflet.marker(location);
+  playerMarker.bindTooltip("You're Here");
+  playerMarker.addTo(map);
+}
+drawPlayerMarker(playerLocation);
 
 // Display the player's items as a collection of unique items
 const playerItems: Item[] = [];
@@ -146,24 +155,24 @@ function spawnCache(cell: Cell) {
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
 
+  // Each cache has a random item amount
+  const itemCount = Math.floor(
+    luck([cell.i, cell.j, "initialValue"].toString()) * MAX_CACHE_ITEMS,
+  );
+  // Fill cache with randomly generated items
+  const cacheItems: Item[] = [];
+  for (let i = 0; i < itemCount; i++) {
+    const newItem: Item = {
+      type: getRandomItemType(),
+      origin: cell,
+      serial: serialNum,
+    };
+    cacheItems.push(newItem);
+    serialNum++;
+  }
+
   // Handle interactions with the cache
   rect.bindPopup(() => {
-    // Each cache has a random item amount
-    const itemCount = Math.floor(
-      luck([cell.i, cell.j, "initialValue"].toString()) * MAX_CACHE_ITEMS,
-    );
-    // Fill cache with randomly generated items
-    const cacheItems: Item[] = [];
-    for (let i = 0; i < itemCount; i++) {
-      const newItem: Item = {
-        type: getRandomItemType(),
-        origin: cell,
-        serial: serialNum,
-      };
-      cacheItems.push(newItem);
-      serialNum++;
-    }
-
     // The popup offers a description and button
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML = `There is a cache here at ${
