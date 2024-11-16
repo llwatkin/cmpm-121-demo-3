@@ -2,7 +2,7 @@
 import leaflet from "leaflet";
 
 const NULL_ISLAND = leaflet.latLng(0, 0);
-const CELL_DEGREES = 1e-4;
+export const CELL_DEGREES = 1e-4;
 
 // Representation of a cell
 export interface Cell {

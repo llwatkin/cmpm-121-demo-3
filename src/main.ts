@@ -13,6 +13,8 @@ import luck from "./luck.ts";
 
 // Import Cell definition
 import { Cell } from "./world.ts";
+// Import cell degrees
+import { CELL_DEGREES } from "./world.ts";
 // Create the world of cells
 import { createWorld } from "./world.ts";
 const world = createWorld();
@@ -222,3 +224,42 @@ for (let i = -CELL_VISIBILITY_RADIUS; i < CELL_VISIBILITY_RADIUS; i++) {
     }
   }
 }
+
+// Movement buttons
+const toolPanel = document.querySelector<HTMLDivElement>("#toolPanel")!;
+createButton({
+  name: "⬆️",
+  div: toolPanel,
+  clickFunction: () => {
+    // Move North
+    playerLocation.lat += CELL_DEGREES;
+    drawPlayerMarker(playerLocation);
+  },
+});
+createButton({
+  name: "⬇️",
+  div: toolPanel,
+  clickFunction: () => {
+    // Move South
+    playerLocation.lat -= CELL_DEGREES;
+    drawPlayerMarker(playerLocation);
+  },
+});
+createButton({
+  name: "⬅️",
+  div: toolPanel,
+  clickFunction: () => {
+    // Move West
+    playerLocation.lng -= CELL_DEGREES;
+    drawPlayerMarker(playerLocation);
+  },
+});
+createButton({
+  name: "➡️",
+  div: toolPanel,
+  clickFunction: () => {
+    // Move East
+    playerLocation.lng += CELL_DEGREES;
+    drawPlayerMarker(playerLocation);
+  },
+});
