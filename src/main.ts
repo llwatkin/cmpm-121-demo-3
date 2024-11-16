@@ -49,7 +49,7 @@ const ITEM_TYPES = data.types;
 
 // Returns a random item type from the item types array
 function getRandomItemType(): string {
-  const randIndex = Math.floor(Math.random() * ITEM_TYPES.length);
+  const randIndex = Math.floor(luck(serialNum.toString()) * ITEM_TYPES.length);
   return ITEM_TYPES[randIndex];
 }
 
