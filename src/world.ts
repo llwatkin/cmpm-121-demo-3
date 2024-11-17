@@ -29,8 +29,8 @@ export function createWorld() {
     // Returns the cell for a given lat/lng point
     getCellForPoint: (point: leaflet.LatLng): Cell => {
       return getKnownCell({
-        i: point.lat / CELL_DEGREES,
-        j: point.lng / CELL_DEGREES,
+        i: Number((point.lat / CELL_DEGREES).toFixed(0)),
+        j: Number((point.lng / CELL_DEGREES).toFixed(0)),
       });
     },
     // Converts cell numbers into lat/lng bounds

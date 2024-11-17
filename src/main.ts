@@ -19,13 +19,13 @@ import { CELL_DEGREES } from "./world.ts";
 import { createWorld } from "./world.ts";
 const world = createWorld();
 
-// App name
+// App and item names
 const APP_NAME = "Smileycache";
 document.title = APP_NAME;
 const ITEM_NAME = "Smiley";
 
 // Location of our classroom (as identified on Google Maps)
-const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
+const ORIGIN_LOCATION = leaflet.latLng(36.98949379578401, -122.06277128548504);
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
@@ -33,7 +33,7 @@ const CELL_VISIBILITY_RADIUS = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 const MAX_CACHE_ITEMS = 10;
 
-// Representation of an item with a type, origin cell, and serial number
+// Interface of item object with a type, origin cell, and serial number
 interface Item {
   readonly type: string;
   readonly origin: Cell;
@@ -71,7 +71,7 @@ function createButton(config: ButtonConfig): HTMLButtonElement {
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(document.getElementById("map")!, {
-  center: OAKES_CLASSROOM,
+  center: ORIGIN_LOCATION,
   zoom: GAMEPLAY_ZOOM_LEVEL,
   minZoom: GAMEPLAY_ZOOM_LEVEL,
   maxZoom: GAMEPLAY_ZOOM_LEVEL,
@@ -88,19 +88,14 @@ leaflet
   })
   .addTo(map);
 
-const playerLocation: leaflet.LatLng = OAKES_CLASSROOM; // Initial location is Oakes Classroom for now
+// Array of cache rectangles added to the map
+const cacheRects: leaflet.Rectangle[] = [];
+
+const playerLocation: leaflet.LatLng = ORIGIN_LOCATION; // Initial location is Oakes Classroom for now
 // Add a marker to represent the player
-let playerMarker = leaflet.marker(playerLocation);
+const playerMarker = leaflet.marker(playerLocation);
 playerMarker.bindTooltip("You're Here");
 playerMarker.addTo(map);
-
-function drawPlayerMarker(location: leaflet.LatLng) {
-  playerMarker.removeFrom(map);
-  playerMarker = leaflet.marker(location);
-  playerMarker.bindTooltip("You're Here");
-  playerMarker.addTo(map);
-}
-drawPlayerMarker(playerLocation);
 
 // Display the player's items as a collection of unique items
 const playerItems: Item[] = [];
@@ -109,14 +104,12 @@ statusPanel.innerHTML = `Go out and collect some ${ITEM_NAME}s!`;
 
 // Returns a string in coordinate format (i, j) for a given cell
 function coords(cell: Cell): string {
-  return `(${cell.i.toFixed(0)}, ${cell.j.toFixed(0)})`;
+  return `(${cell.i}, ${cell.j})`;
 }
 
 // Returns a string in format i:j#serial for a given item
 function getItemName(item: Item): string {
-  return `${item.origin.i.toFixed(0)}:${
-    item.origin.j.toFixed(0)
-  }#${item.serial}`;
+  return `${item.origin.i}:${item.origin.j}#${item.serial}`;
 }
 
 // Returns a string representing a list of items
@@ -148,30 +141,106 @@ function updateItemDisplay(popupDiv: HTMLDivElement, cacheItems: Item[]) {
   }`;
 }
 
-// Add caches to the map by cell numbers
+// Interface for a cache object that implements Memento pattern
+type Memento = string;
+interface Cache<Memento> {
+  location: Cell;
+  numItems: number;
+  cacheItems: Item[];
+  toMemento(): Memento;
+  fromMemento(memento: Memento): void;
+}
+
+// Deterministically sets a cache's number of items
+function setNumItems(cache: Cache<Memento>) {
+  cache.numItems = Math.floor(
+    luck([cache.location.i, cache.location.j, "initialValue"].toString()) *
+      MAX_CACHE_ITEMS,
+  );
+}
+
+// Fills a cache with randomly generated items
+function fillCache(cache: Cache<Memento>) {
+  setNumItems(cache);
+  for (let i = 0; i < cache.numItems; i++) {
+    const newItem: Item = {
+      type: getRandomItemType(),
+      origin: cache.location,
+      serial: serialNum,
+    };
+    cache.cacheItems.push(newItem);
+    serialNum++;
+  }
+}
+
+// Constructor for cache object
+function createCache(cell: Cell): Cache<Memento> {
+  let location = cell;
+  let numItems = 0;
+  let cacheItems: Item[] = [];
+
+  // The issue is that fromMemento() is setting the cacheItems array above to the stored array
+  return {
+    location: location,
+    numItems: numItems,
+    cacheItems: cacheItems, // While this cacheItems, which grabbed the empty array, stays the same
+    toMemento: (): Memento => {
+      return JSON.stringify({
+        location: location,
+        numItems: numItems,
+        cacheItems: cacheItems,
+      });
+    },
+    fromMemento: (memento: Memento) => {
+      const obj = JSON.parse(memento);
+      location = obj.location;
+      numItems = obj.numItems;
+      cacheItems = obj.cacheItems;
+    },
+  };
+}
+
+// Dictionary of cache mementos (saved cache states)
+const mementoDictionary: { [key: string]: string } = {};
+
+// Returns a unique key for a given cell for use in memento dictionary
+function getMementoKey(cell: Cell) {
+  return cell.i.toString() + cell.j.toString();
+}
+
+// Returns saved cache if it exists, otherwise returns null
+function getSavedCache(cell: Cell): Cache<Memento> | null {
+  const key = getMementoKey(cell);
+  if (mementoDictionary[key]) {
+    const cache = createCache(cell);
+    cache.fromMemento(mementoDictionary[key]);
+    return cache;
+  }
+  return null;
+}
+
+// Saves a cache's state to the memento dictionary
+function saveCacheState(cache: Cache<Memento>) {
+  const key = getMementoKey(cache.location);
+  mementoDictionary[key] = cache.toMemento();
+}
+
+// Creates or retrieves a cache at the given cell and adds it to the map
 function spawnCache(cell: Cell) {
+  // Retrieve existing cache or create new one
+  let cache = getSavedCache(cell);
+  if (!cache) {
+    cache = createCache(cell);
+    fillCache(cache);
+    saveCacheState(cache);
+  }
+
   // Convert cell numbers into lat/lng bounds
   const bounds = world.getCellBounds(cell);
-
   // Add a rectangle to the map to represent the cache
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
-
-  // Each cache has a random item amount
-  const itemCount = Math.floor(
-    luck([cell.i, cell.j, "initialValue"].toString()) * MAX_CACHE_ITEMS,
-  );
-  // Fill cache with randomly generated items
-  const cacheItems: Item[] = [];
-  for (let i = 0; i < itemCount; i++) {
-    const newItem: Item = {
-      type: getRandomItemType(),
-      origin: cell,
-      serial: serialNum,
-    };
-    cacheItems.push(newItem);
-    serialNum++;
-  }
+  cacheRects.push(rect);
 
   // Handle interactions with the cache
   rect.bindPopup(() => {
@@ -181,7 +250,7 @@ function spawnCache(cell: Cell) {
       coords(cell)
     }. ${ITEM_NAME}s: <span id="value">${
       displayItems(
-        cacheItems,
+        cache.cacheItems,
         false,
       )
     }</span>`;
@@ -190,10 +259,11 @@ function spawnCache(cell: Cell) {
       name: "Collect",
       div: popupDiv,
       clickFunction: () => {
-        if (cacheItems.length > 0) {
-          const cacheItem = cacheItems.pop();
+        if (cache.cacheItems.length > 0) {
+          const cacheItem = cache.cacheItems.pop();
           playerItems.push(cacheItem!);
-          updateItemDisplay(popupDiv, cacheItems);
+          updateItemDisplay(popupDiv, cache.cacheItems);
+          saveCacheState(cache);
         }
       },
     });
@@ -204,8 +274,9 @@ function spawnCache(cell: Cell) {
       clickFunction: () => {
         if (playerItems.length > 0) {
           const playerItem = playerItems.pop();
-          cacheItems.push(playerItem!);
-          updateItemDisplay(popupDiv, cacheItems);
+          cache.cacheItems.push(playerItem!);
+          updateItemDisplay(popupDiv, cache.cacheItems);
+          saveCacheState(cache);
         }
       },
     });
@@ -214,15 +285,38 @@ function spawnCache(cell: Cell) {
   });
 }
 
-// Look around the player's neighborhood for caches to spawn
-for (let i = -CELL_VISIBILITY_RADIUS; i < CELL_VISIBILITY_RADIUS; i++) {
-  for (let j = -CELL_VISIBILITY_RADIUS; j < CELL_VISIBILITY_RADIUS; j++) {
-    // If location i,j is lucky enough, spawn a cache
-    if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-      const playerCell = world.getCellForPoint(OAKES_CLASSROOM);
-      spawnCache({ i: playerCell.i + i, j: playerCell.j + j });
+function spawnCaches() {
+  // Look around the player's visibility radius for caches to spawn
+  for (let i = -CELL_VISIBILITY_RADIUS; i < CELL_VISIBILITY_RADIUS; i++) {
+    for (let j = -CELL_VISIBILITY_RADIUS; j < CELL_VISIBILITY_RADIUS; j++) {
+      const originCell = world.getCellForPoint(ORIGIN_LOCATION);
+      const iTrue = originCell.i + i;
+      const jTrue = originCell.j + j;
+      // If location i, j is lucky enough, spawn a cache
+      if (
+        luck([iTrue, jTrue].toString()) <
+          CACHE_SPAWN_PROBABILITY
+      ) {
+        spawnCache({ i: iTrue, j: jTrue });
+      }
     }
   }
+}
+spawnCaches();
+
+// Clears all currently drawn cache rectangles
+function clearCaches() {
+  for (let i = 0; i < cacheRects.length; i++) {
+    cacheRects[i].removeFrom(map);
+  }
+}
+
+// Clears caches, moves player marker, sets new map viewpoint, and respawns caches
+function refreshMap() {
+  clearCaches();
+  map.setView(playerLocation);
+  playerMarker.setLatLng(playerLocation);
+  spawnCaches();
 }
 
 // Movement buttons
@@ -233,7 +327,7 @@ createButton({
   clickFunction: () => {
     // Move North
     playerLocation.lat += CELL_DEGREES;
-    drawPlayerMarker(playerLocation);
+    refreshMap();
   },
 });
 createButton({
@@ -242,7 +336,7 @@ createButton({
   clickFunction: () => {
     // Move South
     playerLocation.lat -= CELL_DEGREES;
-    drawPlayerMarker(playerLocation);
+    refreshMap();
   },
 });
 createButton({
@@ -251,7 +345,7 @@ createButton({
   clickFunction: () => {
     // Move West
     playerLocation.lng -= CELL_DEGREES;
-    drawPlayerMarker(playerLocation);
+    refreshMap();
   },
 });
 createButton({
@@ -260,6 +354,6 @@ createButton({
   clickFunction: () => {
     // Move East
     playerLocation.lng += CELL_DEGREES;
-    drawPlayerMarker(playerLocation);
+    refreshMap();
   },
 });
