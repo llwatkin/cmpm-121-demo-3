@@ -143,16 +143,42 @@ function updateItemDisplay(popupDiv: HTMLDivElement, cacheItems: Item[]) {
 
 // Interface for a cache object that implements Memento pattern
 type Memento = string;
-interface Cache<Memento> {
+interface Cache {
   location: Cell;
   numItems: number;
   cacheItems: Item[];
-  toMemento(): Memento;
-  fromMemento(memento: Memento): void;
+}
+
+// Constructor for cache object
+function createCache(cell: Cell): Cache {
+  const location = cell;
+  const numItems = 0;
+  const cacheItems: Item[] = [];
+
+  return {
+    location: location,
+    numItems: numItems,
+    cacheItems: cacheItems,
+  };
+}
+// Returns a string representing cache object
+function toMemento(cache: Cache): Memento {
+  return JSON.stringify({
+    location: cache.location,
+    numItems: cache.numItems,
+    cacheItems: cache.cacheItems,
+  });
+}
+// Restores saved cache state from string
+function fromMemento(cache: Cache, memento: Memento) {
+  const obj = JSON.parse(memento);
+  cache.location = obj.location;
+  cache.numItems = obj.numItems;
+  cache.cacheItems = obj.cacheItems;
 }
 
 // Deterministically sets a cache's number of items
-function setNumItems(cache: Cache<Memento>) {
+function setNumItems(cache: Cache) {
   cache.numItems = Math.floor(
     luck([cache.location.i, cache.location.j, "initialValue"].toString()) *
       MAX_CACHE_ITEMS,
@@ -160,7 +186,7 @@ function setNumItems(cache: Cache<Memento>) {
 }
 
 // Fills a cache with randomly generated items
-function fillCache(cache: Cache<Memento>) {
+function fillCache(cache: Cache) {
   setNumItems(cache);
   for (let i = 0; i < cache.numItems; i++) {
     const newItem: Item = {
@@ -173,33 +199,6 @@ function fillCache(cache: Cache<Memento>) {
   }
 }
 
-// Constructor for cache object
-function createCache(cell: Cell): Cache<Memento> {
-  let location = cell;
-  let numItems = 0;
-  let cacheItems: Item[] = [];
-
-  // The issue is that fromMemento() is setting the cacheItems array above to the stored array
-  return {
-    location: location,
-    numItems: numItems,
-    cacheItems: cacheItems, // While this cacheItems, which grabbed the empty array, stays the same
-    toMemento: (): Memento => {
-      return JSON.stringify({
-        location: location,
-        numItems: numItems,
-        cacheItems: cacheItems,
-      });
-    },
-    fromMemento: (memento: Memento) => {
-      const obj = JSON.parse(memento);
-      location = obj.location;
-      numItems = obj.numItems;
-      cacheItems = obj.cacheItems;
-    },
-  };
-}
-
 // Dictionary of cache mementos (saved cache states)
 const mementoDictionary: { [key: string]: string } = {};
 
@@ -209,20 +208,20 @@ function getMementoKey(cell: Cell) {
 }
 
 // Returns saved cache if it exists, otherwise returns null
-function getSavedCache(cell: Cell): Cache<Memento> | null {
+function getSavedCache(cell: Cell): Cache | null {
   const key = getMementoKey(cell);
   if (mementoDictionary[key]) {
     const cache = createCache(cell);
-    cache.fromMemento(mementoDictionary[key]);
+    fromMemento(cache, mementoDictionary[key]);
     return cache;
   }
   return null;
 }
 
 // Saves a cache's state to the memento dictionary
-function saveCacheState(cache: Cache<Memento>) {
+function saveCacheState(cache: Cache) {
   const key = getMementoKey(cache.location);
-  mementoDictionary[key] = cache.toMemento();
+  mementoDictionary[key] = toMemento(cache);
 }
 
 // Creates or retrieves a cache at the given cell and adds it to the map
