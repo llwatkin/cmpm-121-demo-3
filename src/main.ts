@@ -11,9 +11,8 @@ import "./leafletWorkaround.ts";
 // Deterministic random number generator
 import luck from "./luck.ts";
 
-// Import Cell definition
+// Cell definition
 import { Cell } from "./world.ts";
-// Import cell degrees
 import { CELL_DEGREES } from "./world.ts";
 // Create the world of cells
 import { createWorld } from "./world.ts";
@@ -40,7 +39,7 @@ interface Item {
   readonly serial: number;
 }
 
-// Current serial number
+// Current item serial number (used for generating items)
 let serialNum = 0;
 
 // Get list of all possible item types
@@ -161,6 +160,7 @@ function createCache(cell: Cell): Cache {
     cacheItems: cacheItems,
   };
 }
+
 // Returns a string representing cache object
 function toMemento(cache: Cache): Memento {
   return JSON.stringify({
@@ -169,6 +169,7 @@ function toMemento(cache: Cache): Memento {
     cacheItems: cache.cacheItems,
   });
 }
+
 // Restores saved cache state from string
 function fromMemento(cache: Cache, memento: Memento) {
   const obj = JSON.parse(memento);
@@ -224,6 +225,26 @@ function saveCacheState(cache: Cache) {
   mementoDictionary[key] = toMemento(cache);
 }
 
+// Removes an item from the cache and adds it to the player's items
+function collectItem(popupDiv: HTMLDivElement, cache: Cache) {
+  if (cache.cacheItems.length > 0) {
+    const cacheItem = cache.cacheItems.pop();
+    playerItems.push(cacheItem!);
+    updateItemDisplay(popupDiv, cache.cacheItems);
+    saveCacheState(cache);
+  }
+}
+
+// Removes an item from the player's collection and adds it to the cache
+function depositItem(popupDiv: HTMLDivElement, cache: Cache) {
+  if (playerItems.length > 0) {
+    const playerItem = playerItems.pop();
+    cache.cacheItems.push(playerItem!);
+    updateItemDisplay(popupDiv, cache.cacheItems);
+    saveCacheState(cache);
+  }
+}
+
 // Creates or retrieves a cache at the given cell and adds it to the map
 function spawnCache(cell: Cell) {
   // Retrieve existing cache or create new one
@@ -258,12 +279,7 @@ function spawnCache(cell: Cell) {
       name: "Collect",
       div: popupDiv,
       clickFunction: () => {
-        if (cache.cacheItems.length > 0) {
-          const cacheItem = cache.cacheItems.pop();
-          playerItems.push(cacheItem!);
-          updateItemDisplay(popupDiv, cache.cacheItems);
-          saveCacheState(cache);
-        }
+        collectItem(popupDiv, cache);
       },
     });
     // Clicking this button removes an item from the player's collection and adds it to the cache
@@ -271,21 +287,15 @@ function spawnCache(cell: Cell) {
       name: "Deposit",
       div: popupDiv,
       clickFunction: () => {
-        if (playerItems.length > 0) {
-          const playerItem = playerItems.pop();
-          cache.cacheItems.push(playerItem!);
-          updateItemDisplay(popupDiv, cache.cacheItems);
-          saveCacheState(cache);
-        }
+        depositItem(popupDiv, cache);
       },
     });
-
     return popupDiv;
   });
 }
 
+// Spawns all caches within the player's visibility radius
 function spawnCaches() {
-  // Look around the player's visibility radius for caches to spawn
   for (let i = -CELL_VISIBILITY_RADIUS; i < CELL_VISIBILITY_RADIUS; i++) {
     for (let j = -CELL_VISIBILITY_RADIUS; j < CELL_VISIBILITY_RADIUS; j++) {
       const originCell = world.getCellForPoint(ORIGIN_LOCATION);
@@ -318,41 +328,23 @@ function refreshMap() {
   spawnCaches();
 }
 
-// Movement buttons
+// Create movement buttons
 const toolPanel = document.querySelector<HTMLDivElement>("#toolPanel")!;
-createButton({
-  name: "⬆️",
-  div: toolPanel,
-  clickFunction: () => {
-    // Move North
-    playerLocation.lat += CELL_DEGREES;
-    refreshMap();
-  },
-});
-createButton({
-  name: "⬇️",
-  div: toolPanel,
-  clickFunction: () => {
-    // Move South
-    playerLocation.lat -= CELL_DEGREES;
-    refreshMap();
-  },
-});
-createButton({
-  name: "⬅️",
-  div: toolPanel,
-  clickFunction: () => {
-    // Move West
-    playerLocation.lng -= CELL_DEGREES;
-    refreshMap();
-  },
-});
-createButton({
-  name: "➡️",
-  div: toolPanel,
-  clickFunction: () => {
-    // Move East
-    playerLocation.lng += CELL_DEGREES;
-    refreshMap();
-  },
-});
+const movementButtons = [
+  { name: "⬆️", direction: { lat: 1, lng: 0 } },
+  { name: "⬇️", direction: { lat: -1, lng: 0 } },
+  { name: "⬅️", direction: { lat: 0, lng: -1 } },
+  { name: "➡️", direction: { lat: 0, lng: 1 } },
+];
+for (let i = 0; i < movementButtons.length; i++) {
+  const button = movementButtons[i];
+  createButton({
+    name: button.name,
+    div: toolPanel,
+    clickFunction: () => {
+      playerLocation.lat += button.direction.lat * CELL_DEGREES;
+      playerLocation.lng += button.direction.lng * CELL_DEGREES;
+      refreshMap();
+    },
+  });
+}
