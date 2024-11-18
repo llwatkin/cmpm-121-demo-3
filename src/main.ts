@@ -39,18 +39,9 @@ interface Item {
   readonly serial: number;
 }
 
-// Current item serial number (used for generating items)
-let serialNum = 0;
-
 // Get list of all possible item types
 import data from "./items.json" with { type: "json" };
 const ITEM_TYPES = data.types;
-
-// Returns a random item type from the item types array
-function getRandomItemType(): string {
-  const randIndex = Math.floor(luck(serialNum.toString()) * ITEM_TYPES.length);
-  return ITEM_TYPES[randIndex];
-}
 
 // Config object for button creation function
 interface ButtonConfig {
@@ -140,7 +131,7 @@ function updateItemDisplay(popupDiv: HTMLDivElement, cacheItems: Item[]) {
   }`;
 }
 
-// Interface for a cache object that implements Memento pattern
+// Cache object that implements Memento pattern
 type Memento = string;
 interface Cache {
   location: Cell;
@@ -179,24 +170,31 @@ function fromMemento(cache: Cache, memento: Memento) {
 }
 
 // Deterministically sets a cache's number of items
-function setNumItems(cache: Cache) {
+function setRandomNumItems(cache: Cache) {
   cache.numItems = Math.floor(
     luck([cache.location.i, cache.location.j, "initialValue"].toString()) *
       MAX_CACHE_ITEMS,
   );
 }
 
+// Returns a random item type
+function getRandomItemType(cell: Cell, serialNum: number): string {
+  const randIndex = Math.floor(
+    luck([cell.i, cell.j, serialNum].toString()) * ITEM_TYPES.length,
+  );
+  return ITEM_TYPES[randIndex];
+}
+
 // Fills a cache with randomly generated items
 function fillCache(cache: Cache) {
-  setNumItems(cache);
+  setRandomNumItems(cache);
   for (let i = 0; i < cache.numItems; i++) {
     const newItem: Item = {
-      type: getRandomItemType(),
+      type: getRandomItemType(cache.location, i),
       origin: cache.location,
-      serial: serialNum,
+      serial: i,
     };
     cache.cacheItems.push(newItem);
-    serialNum++;
   }
 }
 
