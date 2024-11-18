@@ -11,11 +11,9 @@ import "./leafletWorkaround.ts";
 // Deterministic random number generator
 import luck from "./luck.ts";
 
-// Cell definition
-import { Cell } from "./world.ts";
-import { CELL_DEGREES } from "./world.ts";
-// Create the world of cells
-import { createWorld } from "./world.ts";
+// Cell definition and function to create world of cells
+import { Cell, createWorld } from "./world.ts";
+// Create the world of cells (includes functions to get cell from point and get a cell's bounds)
 const world = createWorld();
 
 // App and item names
@@ -88,7 +86,7 @@ playerMarker.bindTooltip("You're Here");
 playerMarker.addTo(map);
 
 // Display the player's items as a collection of unique items
-const playerItems: Item[] = [];
+const playerInventory: Item[] = [];
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // element `statusPanel` is defined in index.html
 statusPanel.innerHTML = `Go out and collect some ${ITEM_NAME}s!`;
 
@@ -118,14 +116,14 @@ function displayItems(items: Item[], showData: boolean): string {
 }
 
 // Updates item displays for inventory and pop-ups
-function updateItemDisplay(popupDiv: HTMLDivElement, cacheItems: Item[]) {
+function updateItemDisplay(popupDiv: HTMLDivElement, cacheInventory: Item[]) {
   popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML = displayItems(
-    cacheItems,
+    cacheInventory,
     false,
   );
   statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
     displayItems(
-      playerItems,
+      playerInventory,
       true,
     )
   }`;
@@ -136,19 +134,19 @@ type Memento = string;
 interface Cache {
   location: Cell;
   numItems: number;
-  cacheItems: Item[];
+  inventory: Item[];
 }
 
 // Constructor for cache object
 function createCache(cell: Cell): Cache {
   const location = cell;
   const numItems = 0;
-  const cacheItems: Item[] = [];
+  const inventory: Item[] = [];
 
   return {
     location: location,
     numItems: numItems,
-    cacheItems: cacheItems,
+    inventory: inventory,
   };
 }
 
@@ -157,7 +155,7 @@ function toMemento(cache: Cache): Memento {
   return JSON.stringify({
     location: cache.location,
     numItems: cache.numItems,
-    cacheItems: cache.cacheItems,
+    inventory: cache.inventory,
   });
 }
 
@@ -166,7 +164,7 @@ function fromMemento(cache: Cache, memento: Memento) {
   const obj = JSON.parse(memento);
   cache.location = obj.location;
   cache.numItems = obj.numItems;
-  cache.cacheItems = obj.cacheItems;
+  cache.inventory = obj.inventory;
 }
 
 // Deterministically sets a cache's number of items
@@ -194,7 +192,7 @@ function fillCache(cache: Cache) {
       origin: cache.location,
       serial: i,
     };
-    cache.cacheItems.push(newItem);
+    cache.inventory.push(newItem);
   }
 }
 
@@ -225,20 +223,20 @@ function saveCacheState(cache: Cache) {
 
 // Removes an item from the cache and adds it to the player's items
 function collectItem(popupDiv: HTMLDivElement, cache: Cache) {
-  if (cache.cacheItems.length > 0) {
-    const cacheItem = cache.cacheItems.pop();
-    playerItems.push(cacheItem!);
-    updateItemDisplay(popupDiv, cache.cacheItems);
+  if (cache.inventory.length > 0) {
+    const cacheItem = cache.inventory.pop();
+    playerInventory.push(cacheItem!);
+    updateItemDisplay(popupDiv, cache.inventory);
     saveCacheState(cache);
   }
 }
 
 // Removes an item from the player's collection and adds it to the cache
 function depositItem(popupDiv: HTMLDivElement, cache: Cache) {
-  if (playerItems.length > 0) {
-    const playerItem = playerItems.pop();
-    cache.cacheItems.push(playerItem!);
-    updateItemDisplay(popupDiv, cache.cacheItems);
+  if (playerInventory.length > 0) {
+    const playerItem = playerInventory.pop();
+    cache.inventory.push(playerItem!);
+    updateItemDisplay(popupDiv, cache.inventory);
     saveCacheState(cache);
   }
 }
@@ -268,7 +266,7 @@ function spawnCache(cell: Cell) {
       coords(cell)
     }. ${ITEM_NAME}s: <span id="value">${
       displayItems(
-        cache.cacheItems,
+        cache.inventory,
         false,
       )
     }</span>`;
@@ -340,8 +338,8 @@ for (let i = 0; i < movementButtons.length; i++) {
     name: button.name,
     div: toolPanel,
     clickFunction: () => {
-      playerLocation.lat += button.direction.lat * CELL_DEGREES;
-      playerLocation.lng += button.direction.lng * CELL_DEGREES;
+      playerLocation.lat += button.direction.lat * world.CELL_DEGREES;
+      playerLocation.lng += button.direction.lng * world.CELL_DEGREES;
       refreshMap();
     },
   });

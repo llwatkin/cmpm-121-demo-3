@@ -2,9 +2,9 @@
 import leaflet from "leaflet";
 
 const NULL_ISLAND = leaflet.latLng(0, 0);
-export const CELL_DEGREES = 1e-4;
+const knownCells: Map<string, Cell> = new Map();
 
-// Representation of a cell
+// Definition of a cell
 export interface Cell {
   readonly i: number;
   readonly j: number;
@@ -12,7 +12,7 @@ export interface Cell {
 
 // Contructor for the world of cells
 export function createWorld() {
-  const knownCells: Map<string, Cell> = new Map();
+  const CELL_DEGREES = 1e-4;
 
   // Returns a cell that has already been constructed or constructs a new cell to return
   function getKnownCell(cell: Cell): Cell {
@@ -26,6 +26,7 @@ export function createWorld() {
   }
 
   return {
+    CELL_DEGREES: CELL_DEGREES,
     // Returns the cell for a given lat/lng point
     getCellForPoint: (point: leaflet.LatLng): Cell => {
       return getKnownCell({
