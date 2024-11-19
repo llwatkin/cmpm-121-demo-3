@@ -27,7 +27,7 @@ const ORIGIN_LOCATION = { lat: 36.98949379578401, lng: -122.06277128548504 };
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const CELL_VISIBILITY_RADIUS = 8;
-const CACHE_SPAWN_PROBABILITY = 0.1;
+const CACHE_SPAWN_CHANCE = 0.1;
 const MAX_CACHE_ITEMS = 10;
 
 // Interface of item object with a type, origin cell, and serial number
@@ -79,7 +79,16 @@ leaflet
 // Array of cache rectangles added to the map
 let cacheRects: leaflet.Rectangle[] = [];
 
-const playerLocation: Geopoint = ORIGIN_LOCATION; // Initial location is Oakes Classroom for now
+const playerLocation: Geopoint = {
+  lat: ORIGIN_LOCATION.lat, // Initial location is Oakes Classroom for now
+  lng: ORIGIN_LOCATION.lng,
+};
+// Previous location used for determining whether caches need to be re-genenerated
+const prevPlayerLocation: Geopoint = {
+  lat: ORIGIN_LOCATION.lat, // Initial location is Oakes Classroom for now
+  lng: ORIGIN_LOCATION.lng,
+};
+
 // Add a marker to represent the player
 const playerMarker = leaflet.marker(playerLocation);
 playerMarker.bindTooltip("You're Here");
@@ -294,14 +303,11 @@ function spawnCache(cell: Cell) {
 function spawnCaches() {
   for (let i = -CELL_VISIBILITY_RADIUS; i < CELL_VISIBILITY_RADIUS; i++) {
     for (let j = -CELL_VISIBILITY_RADIUS; j < CELL_VISIBILITY_RADIUS; j++) {
-      const originCell = world.getCellForPoint(ORIGIN_LOCATION);
-      const iTrue = originCell.i + i;
-      const jTrue = originCell.j + j;
+      const playerCell = world.getCellForPoint(playerLocation);
+      const iTrue = playerCell.i + i;
+      const jTrue = playerCell.j + j;
       // If location i, j is lucky enough, spawn a cache
-      if (
-        luck([iTrue, jTrue].toString()) <
-          CACHE_SPAWN_PROBABILITY
-      ) {
+      if (luck([iTrue, jTrue].toString()) < CACHE_SPAWN_CHANCE) {
         spawnCache({ i: iTrue, j: jTrue });
       }
     }
@@ -317,26 +323,45 @@ function clearCaches() {
   cacheRects = [];
 }
 
-// Moves playermarker and map view, refreshing caches if needed
-function refreshMap() {
+// Returns the number of degrees player has moved since previous stored location
+function distanceMoved(point: Geopoint) {
+  const latDiff = point.lat - prevPlayerLocation.lat;
+  const lngDiff = point.lng - prevPlayerLocation.lng;
+  const distance = Math.sqrt(latDiff ** 2 + lngDiff ** 2);
+  return distance;
+}
+
+// Refreshes caches on map
+function refreshCaches() {
   clearCaches();
+  spawnCaches();
+}
+
+// Updates player marker and centers map on it
+function updatePlayerMarker() {
   map.setView(playerLocation);
   playerMarker.setLatLng(playerLocation);
-  spawnCaches();
 }
 
 // Moves the player by a discrete amount in a certain direction
 function movePlayerInDirection(direction: { x: number; y: number }) {
   playerLocation.lat += direction.y * world.CELL_DEGREES;
   playerLocation.lng += direction.x * world.CELL_DEGREES;
-  refreshMap();
+  updatePlayerMarker();
+  refreshCaches();
 }
 
-// Moves the player to any point on the globe
+// Moves the player to any point on the globe, refreshing caches if needed
 function movePlayerToLocation(point: Geopoint) {
+  prevPlayerLocation.lat = playerLocation.lat;
+  prevPlayerLocation.lng = playerLocation.lng;
   playerLocation.lat = point.lat;
   playerLocation.lng = point.lng;
-  refreshMap();
+  updatePlayerMarker();
+  // If player moved far enough to see new caches, refresh caches
+  if (distanceMoved(point) > world.CELL_DEGREES) {
+    refreshCaches();
+  }
 }
 
 // Create movement buttons
