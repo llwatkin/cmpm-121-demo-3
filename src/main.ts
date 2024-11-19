@@ -1,28 +1,34 @@
-// @deno-types="npm:@types/leaflet@^1.9.14"
-import leaflet from "leaflet";
-
 // Style sheets
 import "leaflet/dist/leaflet.css";
 import "./style.css";
 
-// Fix missing marker images
-import "./leafletWorkaround.ts";
-
 // Deterministic random number generator
 import luck from "./luck.ts";
 
-// Cell definition and function to create world of cells
-import { Cell, createWorld, Geopoint } from "./world.ts";
+// Import leaflet map service
+import { LeafletMapService } from "./map.ts";
+const leafletMapService = new LeafletMapService();
+
 // Create the world of cells (includes functions to get cell from point and get a cell's bounds)
+import { createWorld } from "./world.ts";
 const world = createWorld();
+
+// Import type definitions
+import { Cache, Cell, Geopoint, Item } from "./types.ts";
+
+// Import helper functions
+import { createButton } from "./utils.ts";
 
 // App and item names
 const APP_NAME = "Smileycache";
 document.title = APP_NAME;
 const ITEM_NAME = "Smiley";
 
-// Location of our classroom (as identified on Google Maps)
-const ORIGIN_LOCATION = { lat: 36.98949379578401, lng: -122.06277128548504 };
+// Currently the location of our classroom
+const ORIGIN_LOCATION: Geopoint = {
+  lat: 36.98949379578401,
+  lng: -122.06277128548504,
+};
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
@@ -30,69 +36,32 @@ const CELL_VISIBILITY_RADIUS = 8;
 const CACHE_SPAWN_CHANCE = 0.1;
 const MAX_CACHE_ITEMS = 10;
 
-// Interface of item object with a type, origin cell, and serial number
-interface Item {
-  readonly type: string;
-  readonly origin: Cell;
-  readonly serial: number;
-}
-
 // Get list of all possible item types
-import data from "./items.json" with { type: "json" };
+import data from "./itemTypes.json" with { type: "json" };
 const ITEM_TYPES = data.types;
 
-// Config object for button creation function
-interface ButtonConfig {
-  name: string;
-  div: HTMLDivElement;
-  clickFunction(): void;
-}
-
-// Create and return a button with a name and click function in a certain div
-function createButton(config: ButtonConfig): HTMLButtonElement {
-  const newButton = document.createElement("button");
-  newButton.innerHTML = config.name;
-  config.div.append(newButton);
-  newButton.addEventListener("click", config.clickFunction);
-  return newButton;
-}
-
 // Create the map (element with id "map" is defined in index.html)
-const map = leaflet.map(document.getElementById("map")!, {
-  center: ORIGIN_LOCATION,
-  zoom: GAMEPLAY_ZOOM_LEVEL,
-  minZoom: GAMEPLAY_ZOOM_LEVEL,
-  maxZoom: GAMEPLAY_ZOOM_LEVEL,
-  zoomControl: false,
-  scrollWheelZoom: false,
-});
+const mapDiv = document.querySelector<HTMLDivElement>("#map")!;
+leafletMapService.initialize(
+  mapDiv,
+  ORIGIN_LOCATION,
+  GAMEPLAY_ZOOM_LEVEL,
+);
 
-// Populate the map with a background tile layer
-leaflet
-  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: GAMEPLAY_ZOOM_LEVEL,
-    attribution:
-      '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  })
-  .addTo(map);
-
-// Array of cache rectangles added to the map
-let cacheRects: leaflet.Rectangle[] = [];
-
+// Initial player location is Oakes Classroom for now
 const playerLocation: Geopoint = {
-  lat: ORIGIN_LOCATION.lat, // Initial location is Oakes Classroom for now
+  lat: ORIGIN_LOCATION.lat,
   lng: ORIGIN_LOCATION.lng,
 };
+
 // Previous location used for determining whether caches need to be re-genenerated
 const prevPlayerLocation: Geopoint = {
-  lat: ORIGIN_LOCATION.lat, // Initial location is Oakes Classroom for now
+  lat: ORIGIN_LOCATION.lat,
   lng: ORIGIN_LOCATION.lng,
 };
 
 // Add a marker to represent the player
-const playerMarker = leaflet.marker(playerLocation);
-playerMarker.bindTooltip("You're Here");
-playerMarker.addTo(map);
+const playerMarker = leafletMapService.addMarker(playerLocation, "You");
 
 // Display the player's items as a collection of unique items
 const playerInventory: Item[] = [];
@@ -138,14 +107,6 @@ function updateItemDisplay(popupDiv: HTMLDivElement, cacheInventory: Item[]) {
   }`;
 }
 
-// Cache object that implements Memento pattern
-type Memento = string;
-interface Cache {
-  location: Cell;
-  numItems: number;
-  inventory: Item[];
-}
-
 // Constructor for cache object
 function createCache(cell: Cell): Cache {
   const location = cell;
@@ -160,7 +121,7 @@ function createCache(cell: Cell): Cache {
 }
 
 // Returns a string representing cache object
-function toMemento(cache: Cache): Memento {
+function toMemento(cache: Cache): string {
   return JSON.stringify({
     location: cache.location,
     numItems: cache.numItems,
@@ -169,7 +130,7 @@ function toMemento(cache: Cache): Memento {
 }
 
 // Restores saved cache state from string
-function fromMemento(cache: Cache, memento: Memento) {
+function fromMemento(cache: Cache, memento: string) {
   const obj = JSON.parse(memento);
   cache.location = obj.location;
   cache.numItems = obj.numItems;
@@ -263,9 +224,7 @@ function spawnCache(cell: Cell) {
   // Convert cell numbers into lat/lng bounds
   const bounds = world.getCellBounds(cell);
   // Add a rectangle to the map to represent the cache
-  const rect = leaflet.rectangle(bounds);
-  rect.addTo(map);
-  cacheRects.push(rect);
+  const rect = leafletMapService.addRect(bounds);
 
   // Handle interactions with the cache
   rect.bindPopup(() => {
@@ -315,14 +274,6 @@ function spawnCaches() {
 }
 spawnCaches();
 
-// Clears all currently drawn cache rectangles
-function clearCaches() {
-  for (let i = 0; i < cacheRects.length; i++) {
-    cacheRects[i].removeFrom(map);
-  }
-  cacheRects = [];
-}
-
 // Returns the number of degrees player has moved since previous stored location
 function distanceMoved(point: Geopoint) {
   const latDiff = point.lat - prevPlayerLocation.lat;
@@ -333,14 +284,14 @@ function distanceMoved(point: Geopoint) {
 
 // Refreshes caches on map
 function refreshCaches() {
-  clearCaches();
+  leafletMapService.clearRects();
   spawnCaches();
 }
 
-// Updates player marker and centers map on it
+// Updates player marker and centers view on it
 function updatePlayerMarker() {
-  map.setView(playerLocation);
-  playerMarker.setLatLng(playerLocation);
+  leafletMapService.setView(playerLocation, GAMEPLAY_ZOOM_LEVEL);
+  leafletMapService.moveMarker(playerMarker, playerLocation);
 }
 
 // Moves the player by a discrete amount in a certain direction

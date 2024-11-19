@@ -1,24 +1,16 @@
-// @deno-types="npm:@types/leaflet@^1.9.14"
-import leaflet from "leaflet";
+// Import type definitions
+import { Cell, Geobounds, Geopoint } from "./types.ts";
 
-const NULL_ISLAND = leaflet.latLng(0, 0);
-const knownCells: Map<string, Cell> = new Map();
+// Fix missing marker images
+import "./leafletWorkaround.ts";
 
-// Definition of a point on the globe
-export interface Geopoint {
-  lat: number;
-  lng: number;
-}
-
-// Definition of a cell
-export interface Cell {
-  readonly i: number;
-  readonly j: number;
-}
+// Constants
+const CELL_DEGREES = 1e-4;
+const NULL_ISLAND = { lat: 0, lng: 0 };
 
 // Contructor for the world of cells
 export function createWorld() {
-  const CELL_DEGREES = 1e-4;
+  const knownCells: Map<string, Cell> = new Map();
 
   // Returns a cell that has already been constructed or constructs a new cell to return
   function getKnownCell(cell: Cell): Cell {
@@ -41,18 +33,18 @@ export function createWorld() {
       });
     },
     // Converts cell numbers into lat/lng bounds
-    getCellBounds: (cell: Cell): leaflet.LatLngBounds => {
+    getCellBounds: (cell: Cell): Geobounds => {
       const mapOrigin = NULL_ISLAND;
-      const bounds = leaflet.latLngBounds([
-        [
-          mapOrigin.lat + cell.i * CELL_DEGREES,
-          mapOrigin.lng + cell.j * CELL_DEGREES,
-        ],
-        [
-          mapOrigin.lat + (cell.i + 1) * CELL_DEGREES,
-          mapOrigin.lng + (cell.j + 1) * CELL_DEGREES,
-        ],
-      ]);
+      const bounds = {
+        startCoord: {
+          lat: mapOrigin.lat + cell.i * CELL_DEGREES,
+          lng: mapOrigin.lng + cell.j * CELL_DEGREES,
+        },
+        endCoord: {
+          lat: mapOrigin.lat + (cell.i + 1) * CELL_DEGREES,
+          lng: mapOrigin.lng + (cell.j + 1) * CELL_DEGREES,
+        },
+      };
       return bounds;
     },
   };
