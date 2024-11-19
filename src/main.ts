@@ -12,7 +12,7 @@ import "./leafletWorkaround.ts";
 import luck from "./luck.ts";
 
 // Cell definition and function to create world of cells
-import { Cell, createWorld } from "./world.ts";
+import { Cell, createWorld, Geopoint } from "./world.ts";
 // Create the world of cells (includes functions to get cell from point and get a cell's bounds)
 const world = createWorld();
 
@@ -22,7 +22,7 @@ document.title = APP_NAME;
 const ITEM_NAME = "Smiley";
 
 // Location of our classroom (as identified on Google Maps)
-const ORIGIN_LOCATION = leaflet.latLng(36.98949379578401, -122.06277128548504);
+const ORIGIN_LOCATION = { lat: 36.98949379578401, lng: -122.06277128548504 };
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
@@ -77,9 +77,9 @@ leaflet
   .addTo(map);
 
 // Array of cache rectangles added to the map
-const cacheRects: leaflet.Rectangle[] = [];
+let cacheRects: leaflet.Rectangle[] = [];
 
-const playerLocation: leaflet.LatLng = ORIGIN_LOCATION; // Initial location is Oakes Classroom for now
+const playerLocation: Geopoint = ORIGIN_LOCATION; // Initial location is Oakes Classroom for now
 // Add a marker to represent the player
 const playerMarker = leaflet.marker(playerLocation);
 playerMarker.bindTooltip("You're Here");
@@ -314,9 +314,10 @@ function clearCaches() {
   for (let i = 0; i < cacheRects.length; i++) {
     cacheRects[i].removeFrom(map);
   }
+  cacheRects = [];
 }
 
-// Clears caches, moves player marker, sets new map viewpoint, and respawns caches
+// Moves playermarker and map view, refreshing caches if needed
 function refreshMap() {
   clearCaches();
   map.setView(playerLocation);
@@ -324,13 +325,27 @@ function refreshMap() {
   spawnCaches();
 }
 
+// Moves the player by a discrete amount in a certain direction
+function movePlayerInDirection(direction: { x: number; y: number }) {
+  playerLocation.lat += direction.y * world.CELL_DEGREES;
+  playerLocation.lng += direction.x * world.CELL_DEGREES;
+  refreshMap();
+}
+
+// Moves the player to any point on the globe
+function movePlayerToLocation(point: Geopoint) {
+  playerLocation.lat = point.lat;
+  playerLocation.lng = point.lng;
+  refreshMap();
+}
+
 // Create movement buttons
 const toolPanel = document.querySelector<HTMLDivElement>("#toolPanel")!;
 const movementButtons = [
-  { name: "⬆️", direction: { lat: 1, lng: 0 } },
-  { name: "⬇️", direction: { lat: -1, lng: 0 } },
-  { name: "⬅️", direction: { lat: 0, lng: -1 } },
-  { name: "➡️", direction: { lat: 0, lng: 1 } },
+  { name: "⬆️", direction: { x: 0, y: 1 } },
+  { name: "⬇️", direction: { x: 0, y: -1 } },
+  { name: "⬅️", direction: { x: -1, y: 0 } },
+  { name: "➡️", direction: { x: 1, y: 0 } },
 ];
 for (let i = 0; i < movementButtons.length; i++) {
   const button = movementButtons[i];
@@ -338,9 +353,39 @@ for (let i = 0; i < movementButtons.length; i++) {
     name: button.name,
     div: toolPanel,
     clickFunction: () => {
-      playerLocation.lat += button.direction.lat * world.CELL_DEGREES;
-      playerLocation.lng += button.direction.lng * world.CELL_DEGREES;
-      refreshMap();
+      movePlayerInDirection(button.direction);
     },
   });
 }
+
+// Whether or not auto movement based on real-world geolocation is turned on
+const autoMoveOn: boolean = false;
+let watchId: number;
+
+// Moves the player to a point on the globe according to real-world geolocation
+function autoMove(position: GeolocationPosition) {
+  movePlayerToLocation({
+    lat: position.coords.latitude,
+    lng: position.coords.longitude,
+  });
+}
+
+// Gets the player's geolocation if supported by browser
+function toggleAutoMove() {
+  if (navigator.geolocation) {
+    if (!autoMoveOn) {
+      watchId = navigator.geolocation.watchPosition(autoMove);
+    } else {
+      navigator.geolocation.clearWatch(watchId);
+    }
+  }
+}
+
+// Geolocation toggle button
+createButton({
+  name: "🌐",
+  div: toolPanel,
+  clickFunction: () => {
+    toggleAutoMove();
+  },
+});

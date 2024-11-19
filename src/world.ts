@@ -4,6 +4,12 @@ import leaflet from "leaflet";
 const NULL_ISLAND = leaflet.latLng(0, 0);
 const knownCells: Map<string, Cell> = new Map();
 
+// Definition of a point on the globe
+export interface Geopoint {
+  lat: number;
+  lng: number;
+}
+
 // Definition of a cell
 export interface Cell {
   readonly i: number;
@@ -28,7 +34,7 @@ export function createWorld() {
   return {
     CELL_DEGREES: CELL_DEGREES,
     // Returns the cell for a given lat/lng point
-    getCellForPoint: (point: leaflet.LatLng): Cell => {
+    getCellForPoint: (point: Geopoint): Cell => {
       return getKnownCell({
         i: Number((point.lat / CELL_DEGREES).toFixed(0)),
         j: Number((point.lng / CELL_DEGREES).toFixed(0)),
