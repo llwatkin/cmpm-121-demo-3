@@ -48,25 +48,17 @@ leafletMapService.initialize(
   GAMEPLAY_ZOOM_LEVEL,
 );
 
-// Initial player location is Oakes Classroom for now
-const playerLocation: Geopoint = {
-  lat: ORIGIN_LOCATION.lat,
-  lng: ORIGIN_LOCATION.lng,
-};
+// Load saved player location or it will be set to the origin location defined above
+const playerLocation: Geopoint = loadPlayerLocation();
 
 // Previous location used for determining whether caches need to be re-genenerated
 const prevPlayerLocation: Geopoint = {
-  lat: ORIGIN_LOCATION.lat,
-  lng: ORIGIN_LOCATION.lng,
+  lat: playerLocation.lat,
+  lng: playerLocation.lng,
 };
 
 // Add a marker to represent the player
 const playerMarker = leafletMapService.addMarker(playerLocation, "You");
-
-// Display the player's items as a collection of unique items
-const playerInventory: Item[] = [];
-const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // element `statusPanel` is defined in index.html
-statusPanel.innerHTML = `Go out and collect some ${ITEM_NAME}s!`;
 
 // Returns a string in coordinate format (i, j) for a given cell
 function coords(cell: Cell): string {
@@ -93,18 +85,28 @@ function displayItems(items: Item[], showData: boolean): string {
   return output;
 }
 
-// Updates item displays for inventory and pop-ups
-function updateItemDisplay(popupDiv: HTMLDivElement, cacheInventory: Item[]) {
-  popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML = displayItems(
-    cacheInventory,
-    false,
-  );
+// Display the player's items as a collection of unique items
+const playerInventory: Item[] = loadPlayerInventory();
+const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // element `statusPanel` is defined in index.html
+
+// Updates the status panel to display current player inventory
+function updatePlayerInventoryDisplay() {
   statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
     displayItems(
       playerInventory,
       true,
     )
   }`;
+}
+updatePlayerInventoryDisplay();
+
+// Updates item displays for player inventory and a given pop-up
+function updateItemDisplay(popupDiv: HTMLDivElement, cacheInventory: Item[]) {
+  popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML = displayItems(
+    cacheInventory,
+    false,
+  );
+  updatePlayerInventoryDisplay();
 }
 
 // Constructor for cache object
@@ -167,7 +169,7 @@ function fillCache(cache: Cache) {
 }
 
 // Dictionary of cache mementos (saved cache states)
-const mementoDictionary: { [key: string]: string } = {};
+const mementoDictionary: { [key: string]: string } = loadCacheData();
 
 // Returns a unique key for a given cell for use in memento dictionary
 function getMementoKey(cell: Cell) {
@@ -198,6 +200,7 @@ function collectItem(popupDiv: HTMLDivElement, cache: Cache) {
     playerInventory.push(cacheItem!);
     updateItemDisplay(popupDiv, cache.inventory);
     saveCacheState(cache);
+    saveGameState();
   }
 }
 
@@ -208,6 +211,7 @@ function depositItem(popupDiv: HTMLDivElement, cache: Cache) {
     cache.inventory.push(playerItem!);
     updateItemDisplay(popupDiv, cache.inventory);
     saveCacheState(cache);
+    saveGameState();
   }
 }
 
@@ -293,6 +297,7 @@ function updatePlayerMarker() {
   leafletMapService.setView(playerLocation, GAMEPLAY_ZOOM_LEVEL);
   leafletMapService.moveMarker(playerMarker, playerLocation);
 }
+updatePlayerMarker();
 
 // Moves the player by a discrete amount in a certain direction
 function movePlayerInDirection(direction: { x: number; y: number }) {
@@ -300,6 +305,7 @@ function movePlayerInDirection(direction: { x: number; y: number }) {
   playerLocation.lng += direction.x * world.CELL_DEGREES;
   updatePlayerMarker();
   refreshCaches();
+  saveGameState();
 }
 
 // Moves the player to any point on the globe, refreshing caches if needed
@@ -313,6 +319,7 @@ function movePlayerToLocation(point: Geopoint) {
   if (distanceMoved(point) > world.CELL_DEGREES) {
     refreshCaches();
   }
+  saveGameState();
 }
 
 // Create movement buttons
@@ -365,3 +372,28 @@ createButton({
     toggleAutoMove();
   },
 });
+
+// Save player location, inventory, and cache states to local storage
+function saveGameState() {
+  localStorage.setItem("locationData", JSON.stringify(playerLocation));
+  localStorage.setItem("inventoryData", JSON.stringify(playerInventory));
+  localStorage.setItem("cacheData", JSON.stringify(mementoDictionary));
+}
+
+// Attempts to load and restore saved cache data from local storage
+function loadCacheData(): { [key: string]: string } {
+  const cacheData = localStorage.getItem("cacheData");
+  return cacheData ? JSON.parse(cacheData) : {};
+}
+
+// Attempts to load and restore saved player inventory data from local storage
+function loadPlayerInventory(): Item[] {
+  const inventoryData = localStorage.getItem("inventoryData");
+  return inventoryData ? JSON.parse(inventoryData) : [];
+}
+
+// Attempts to load and restore saved player location from local storage
+function loadPlayerLocation(): Geopoint {
+  const locationData = localStorage.getItem("locationData");
+  return locationData ? JSON.parse(locationData) : ORIGIN_LOCATION;
+}
