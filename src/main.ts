@@ -86,7 +86,7 @@ function displayItems(items: Item[], showData: boolean): string {
 }
 
 // Display the player's items as a collection of unique items
-const playerInventory: Item[] = loadPlayerInventory();
+let playerInventory: Item[] = loadPlayerInventory();
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // element `statusPanel` is defined in index.html
 
 // Updates the status panel to display current player inventory
@@ -169,7 +169,7 @@ function fillCache(cache: Cache) {
 }
 
 // Dictionary of cache mementos (saved cache states)
-const mementoDictionary: { [key: string]: string } = loadCacheData();
+let mementoDictionary: { [key: string]: string } = loadCacheData();
 
 // Returns a unique key for a given cell for use in memento dictionary
 function getMementoKey(cell: Cell) {
@@ -373,6 +373,22 @@ createButton({
   },
 });
 
+// Clear save data and reset game state button
+createButton({
+  name: "🚮",
+  div: toolPanel,
+  clickFunction: () => {
+    localStorage.clear();
+    playerLocation.lat = ORIGIN_LOCATION.lat;
+    playerLocation.lng = ORIGIN_LOCATION.lng;
+    playerInventory = [];
+    mementoDictionary = {};
+    updatePlayerInventoryDisplay();
+    updatePlayerMarker();
+    refreshCaches();
+  },
+});
+
 // Save player location, inventory, and cache states to local storage
 function saveGameState() {
   localStorage.setItem("locationData", JSON.stringify(playerLocation));
@@ -395,5 +411,7 @@ function loadPlayerInventory(): Item[] {
 // Attempts to load and restore saved player location from local storage
 function loadPlayerLocation(): Geopoint {
   const locationData = localStorage.getItem("locationData");
-  return locationData ? JSON.parse(locationData) : ORIGIN_LOCATION;
+  return locationData
+    ? JSON.parse(locationData)
+    : { lat: ORIGIN_LOCATION.lat, lng: ORIGIN_LOCATION.lng };
 }
