@@ -57,6 +57,9 @@ const prevPlayerLocation: Geopoint = {
   lng: playerLocation.lng,
 };
 
+// Stores the movement history of the player
+let movementHistory: Geopoint[] = loadMovementData();
+
 // Add a marker to represent the player
 const playerMarker = leafletMapService.addMarker(playerLocation, "You");
 
@@ -288,14 +291,22 @@ function distanceMoved(point: Geopoint) {
 
 // Refreshes caches on map
 function refreshCaches() {
-  leafletMapService.clearRects();
+  leafletMapService.clear();
   spawnCaches();
+}
+
+// Clears existing polyline and redraws it
+function updatePolyline() {
+  movementHistory.push({ lat: playerLocation.lat, lng: playerLocation.lng });
+  leafletMapService.clearPolyline();
+  leafletMapService.addPolyline(movementHistory);
 }
 
 // Updates player marker and centers view on it
 function updatePlayerMarker() {
   leafletMapService.setView(playerLocation, GAMEPLAY_ZOOM_LEVEL);
   leafletMapService.moveMarker(playerMarker, playerLocation);
+  updatePolyline();
 }
 updatePlayerMarker();
 
@@ -342,7 +353,7 @@ for (let i = 0; i < movementButtons.length; i++) {
 }
 
 // Whether or not auto movement based on real-world geolocation is turned on
-const autoMoveOn: boolean = false;
+let autoMoveOn: boolean = false;
 let watchId: number;
 
 // Moves the player to a point on the globe according to real-world geolocation
@@ -357,8 +368,11 @@ function autoMove(position: GeolocationPosition) {
 function toggleAutoMove() {
   if (navigator.geolocation) {
     if (!autoMoveOn) {
+      autoMoveOn = true;
       watchId = navigator.geolocation.watchPosition(autoMove);
+      movementHistory = []; // Switching to geolocation movement clears movement history
     } else {
+      autoMoveOn = false;
       navigator.geolocation.clearWatch(watchId);
     }
   }
@@ -381,8 +395,10 @@ createButton({
     localStorage.clear();
     playerLocation.lat = ORIGIN_LOCATION.lat;
     playerLocation.lng = ORIGIN_LOCATION.lng;
+    movementHistory = [];
     playerInventory = [];
     mementoDictionary = {};
+    autoMoveOn = false;
     updatePlayerInventoryDisplay();
     updatePlayerMarker();
     refreshCaches();
@@ -392,20 +408,9 @@ createButton({
 // Save player location, inventory, and cache states to local storage
 function saveGameState() {
   localStorage.setItem("locationData", JSON.stringify(playerLocation));
+  localStorage.setItem("movementData", JSON.stringify(movementHistory));
   localStorage.setItem("inventoryData", JSON.stringify(playerInventory));
   localStorage.setItem("cacheData", JSON.stringify(mementoDictionary));
-}
-
-// Attempts to load and restore saved cache data from local storage
-function loadCacheData(): { [key: string]: string } {
-  const cacheData = localStorage.getItem("cacheData");
-  return cacheData ? JSON.parse(cacheData) : {};
-}
-
-// Attempts to load and restore saved player inventory data from local storage
-function loadPlayerInventory(): Item[] {
-  const inventoryData = localStorage.getItem("inventoryData");
-  return inventoryData ? JSON.parse(inventoryData) : [];
 }
 
 // Attempts to load and restore saved player location from local storage
@@ -414,4 +419,22 @@ function loadPlayerLocation(): Geopoint {
   return locationData
     ? JSON.parse(locationData)
     : { lat: ORIGIN_LOCATION.lat, lng: ORIGIN_LOCATION.lng };
+}
+
+// Attempts to load and restore saved player movement history
+function loadMovementData(): Geopoint[] {
+  const movementData = localStorage.getItem("movementData");
+  return movementData ? JSON.parse(movementData) : [];
+}
+
+// Attempts to load and restore saved player inventory data from local storage
+function loadPlayerInventory(): Item[] {
+  const inventoryData = localStorage.getItem("inventoryData");
+  return inventoryData ? JSON.parse(inventoryData) : [];
+}
+
+// Attempts to load and restore saved cache data from local storage
+function loadCacheData(): { [key: string]: string } {
+  const cacheData = localStorage.getItem("cacheData");
+  return cacheData ? JSON.parse(cacheData) : {};
 }

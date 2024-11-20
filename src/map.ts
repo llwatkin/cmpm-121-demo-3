@@ -23,6 +23,7 @@ interface MapService {
 export class LeafletMapService implements MapService {
   private map: leaflet.Map | null = null;
   private rects: leaflet.Rectangle[] = [];
+  private polyline: leaflet.Polyline | null = null;
 
   initialize(parentElement: HTMLElement, center: Geopoint, zoom: number) {
     this.map = leaflet.map(parentElement, {
@@ -80,20 +81,25 @@ export class LeafletMapService implements MapService {
     return rect;
   }
 
-  clear() {
+  addPolyline(points: Geopoint[]) {
     if (this.map) {
-      this.map.eachLayer((layer) => {
-        layer.remove();
-      });
+      this.polyline = leaflet.polyline(points).addTo(this.map);
     }
   }
 
-  clearRects() {
+  clear() {
     if (this.map) {
       for (let i = 0; i < this.rects.length; i++) {
         this.rects[i].removeFrom(this.map);
       }
       this.rects = [];
+    }
+  }
+
+  clearPolyline() {
+    if (this.map && this.polyline) {
+      this.polyline.removeFrom(this.map);
+      this.polyline = null;
     }
   }
 }
