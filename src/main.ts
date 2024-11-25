@@ -6,7 +6,7 @@ import "./style.css";
 import luck from "./luck.ts";
 
 // Import leaflet map service
-import { LeafletMapService } from "./map.ts";
+import { LeafletMapService, Rectangle } from "./map.ts";
 const leafletMapService = new LeafletMapService();
 
 // Create the world of cells (includes functions to get cell from point and get a cell's bounds)
@@ -38,7 +38,6 @@ const MAX_CACHE_ITEMS = 10;
 
 // Get list of all possible item types
 import data from "./itemTypes.json" with { type: "json" };
-import { Rectangle } from "npm:@types/leaflet@^1.9.14";
 const ITEM_TYPES = data.types;
 
 // Create the map (element with id "map" is defined in index.html)
@@ -92,26 +91,6 @@ function displayItems(items: Item[], showData: boolean): string {
 // Display the player's items as a collection of unique items
 let playerInventory: Item[] = loadPlayerInventory();
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // element `statusPanel` is defined in index.html
-
-// Updates the status panel to display current player inventory
-function updatePlayerInventoryDisplay() {
-  statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
-    displayItems(
-      playerInventory,
-      true,
-    )
-  }`;
-}
-updatePlayerInventoryDisplay();
-
-// Updates item displays for player inventory and a given pop-up
-function updateItemDisplay(popupDiv: HTMLDivElement, cacheInventory: Item[]) {
-  popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML = displayItems(
-    cacheInventory,
-    false,
-  );
-  updatePlayerInventoryDisplay();
-}
 
 // Constructor for cache object
 function createCache(cell: Cell): Cache {
@@ -197,25 +176,68 @@ function saveCacheState(cache: Cache) {
   mementoDictionary[key] = toMemento(cache);
 }
 
+// Transfers an item from one inventory to another, returning null if source inventory was empty and item transferred if successful
+function transferItem(fromInventory: Item[], toInventory: Item[]): Item | null {
+  if (fromInventory.length > 0) {
+    const item = fromInventory.pop()!;
+    toInventory.push(item);
+    return item;
+  }
+  return null;
+}
+
 // Removes an item from the cache and adds it to the player's items
-function collectItem(popupDiv: HTMLDivElement, cache: Cache) {
-  if (cache.inventory.length > 0) {
-    const cacheItem = cache.inventory.pop();
-    playerInventory.push(cacheItem!);
-    updateItemDisplay(popupDiv, cache.inventory);
+function collectItemFromCache(cache: Cache) {
+  const item = transferItem(cache.inventory, playerInventory);
+  if (item) {
     saveCacheState(cache);
     saveGameState();
   }
+  return item;
 }
 
 // Removes an item from the player's collection and adds it to the cache
-function depositItem(popupDiv: HTMLDivElement, cache: Cache) {
-  if (playerInventory.length > 0) {
-    const playerItem = playerInventory.pop();
-    cache.inventory.push(playerItem!);
-    updateItemDisplay(popupDiv, cache.inventory);
+function depositItemToCache(cache: Cache) {
+  const item = transferItem(playerInventory, cache.inventory);
+  if (item) {
     saveCacheState(cache);
     saveGameState();
+  }
+  return item;
+}
+
+// Updates the popup UI for a given cache
+function updateCacheUI(popupDiv: HTMLDivElement, cache: Cache) {
+  popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML = displayItems(
+    cache.inventory,
+    false,
+  );
+}
+
+// Updates the status panel to display current player inventory
+function updatePlayerUI() {
+  statusPanel.innerHTML = `${ITEM_NAME}s collected: ${
+    displayItems(
+      playerInventory,
+      true,
+    )
+  }`;
+}
+updatePlayerUI();
+
+function handleCollectButtonClick(cache: Cache, popupDiv: HTMLDivElement) {
+  const collectedItem = collectItemFromCache(cache); // Game logic
+  if (collectedItem) {
+    updateCacheUI(popupDiv, cache); // UI updates
+    updatePlayerUI(); // Update the player's inventory display
+  }
+}
+
+function handleDepositButtonClick(cache: Cache, popupDiv: HTMLDivElement) {
+  const depositedItem = depositItemToCache(cache); // Game logic
+  if (depositedItem) {
+    updateCacheUI(popupDiv, cache); // UI updates
+    updatePlayerUI(); // Update the player's inventory display
   }
 }
 
@@ -256,7 +278,7 @@ function bindCachePopup(cache: Cache, rect: Rectangle, cell: Cell) {
       name: "Collect",
       div: popupDiv,
       clickFunction: () => {
-        collectItem(popupDiv, cache);
+        handleCollectButtonClick(cache, popupDiv);
       },
     });
     // Clicking this button removes an item from the player's collection and adds it to the cache
@@ -264,7 +286,7 @@ function bindCachePopup(cache: Cache, rect: Rectangle, cell: Cell) {
       name: "Deposit",
       div: popupDiv,
       clickFunction: () => {
-        depositItem(popupDiv, cache);
+        handleDepositButtonClick(cache, popupDiv);
       },
     });
     return popupDiv;
@@ -412,7 +434,7 @@ createButton({
     playerInventory = [];
     mementoDictionary = {};
     autoMoveOn = false;
-    updatePlayerInventoryDisplay();
+    updatePlayerUI();
     updatePlayerMarker();
     refreshCaches();
   },

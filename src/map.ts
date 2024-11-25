@@ -20,6 +20,8 @@ interface MapService {
   clear(): void;
 }
 
+export type Rectangle = leaflet.Rectangle;
+
 export class LeafletMapService implements MapService {
   private map: leaflet.Map | null = null;
   private rects: leaflet.Rectangle[] = [];
