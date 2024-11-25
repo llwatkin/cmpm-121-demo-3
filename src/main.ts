@@ -38,6 +38,7 @@ const MAX_CACHE_ITEMS = 10;
 
 // Get list of all possible item types
 import data from "./itemTypes.json" with { type: "json" };
+import { Rectangle } from "npm:@types/leaflet@^1.9.14";
 const ITEM_TYPES = data.types;
 
 // Create the map (element with id "map" is defined in index.html)
@@ -218,24 +219,29 @@ function depositItem(popupDiv: HTMLDivElement, cache: Cache) {
   }
 }
 
-// Creates or retrieves a cache at the given cell and adds it to the map
-function spawnCache(cell: Cell) {
-  // Retrieve existing cache or create new one
+// Retrieve existing cache or create new one and return it
+function getOrCreateCache(cell: Cell) {
   let cache = getSavedCache(cell);
   if (!cache) {
     cache = createCache(cell);
     fillCache(cache);
     saveCacheState(cache);
   }
+  return cache;
+}
 
+function addCacheToMap(cell: Cell) {
   // Convert cell numbers into lat/lng bounds
   const bounds = world.getCellBounds(cell);
   // Add a rectangle to the map to represent the cache
   const rect = leafletMapService.addRect(bounds);
+  return rect;
+}
 
+function bindCachePopup(cache: Cache, rect: Rectangle, cell: Cell) {
   // Handle interactions with the cache
   rect.bindPopup(() => {
-    // The popup offers a description and button
+    // The popup offers a description and buttons
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML = `There is a cache here at ${
       coords(cell)
@@ -263,6 +269,13 @@ function spawnCache(cell: Cell) {
     });
     return popupDiv;
   });
+}
+
+// Creates or retrieves a cache at the given cell, adds it to the map, and binds a popup to it
+function spawnCache(cell: Cell) {
+  const cache = getOrCreateCache(cell);
+  const rect = addCacheToMap(cell);
+  bindCachePopup(cache, rect, cell);
 }
 
 // Spawns all caches within the player's visibility radius
